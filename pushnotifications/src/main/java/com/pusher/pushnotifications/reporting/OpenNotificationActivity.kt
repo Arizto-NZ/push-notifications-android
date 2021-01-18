@@ -30,7 +30,7 @@ class OpenNotificationActivity: Activity() {
             i = packageManager.getLaunchIntentForPackage(packageName)
         }
         
-        val link: String
+        val link: String?
 
         link = i.getStringExtra("link")
 
