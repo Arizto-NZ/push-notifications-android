@@ -22,6 +22,7 @@ class OpenNotificationActivity: Activity() {
     private val log = Logger.get(this::class)
 
     private fun startIntent(bundle: Bundle, clickAction: String? = null) {
+        log.i("OpenNotificationActivity $clickAction")
         val i: Intent
         if (clickAction != null) {
             i = Intent()
@@ -29,6 +30,8 @@ class OpenNotificationActivity: Activity() {
         } else {
             i = packageManager.getLaunchIntentForPackage(packageName)
         }
+        
+        i.replaceExtras(bundle)
         
         val link: String?
 
@@ -38,8 +41,6 @@ class OpenNotificationActivity: Activity() {
           log.i("Got URI for action $link")
           i.setData(Uri.parse(link))
         }
-
-        i.replaceExtras(bundle)
 
         // We need to clear the activity stack so that this activity doesn't show up when customers
         // are debugging.
