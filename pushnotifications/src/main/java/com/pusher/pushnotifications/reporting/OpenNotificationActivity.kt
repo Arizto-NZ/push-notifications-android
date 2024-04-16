@@ -2,6 +2,7 @@ package com.pusher.pushnotifications.reporting
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.work.*
 import com.google.gson.Gson
@@ -20,6 +21,7 @@ class OpenNotificationActivity: Activity() {
     private val log = Logger.get(this::class)
 
     private fun startIntent(bundle: Bundle?, clickAction: String? = null) {
+        log.i("OpenNotificationActivity $clickAction")
         val i: Intent
         if (clickAction != null) {
             i = Intent()
@@ -29,6 +31,15 @@ class OpenNotificationActivity: Activity() {
         }
 
         i.replaceExtras(bundle)
+
+        val link: String?
+
+        link = i.getStringExtra("link")
+
+        if(link != null) {
+          log.i("Got URI for action $link")
+          i.setData(Uri.parse(link))
+        }
 
         // We need to clear the activity stack so that this activity doesn't show up when customers
         // are debugging.
