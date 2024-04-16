@@ -3,7 +3,8 @@ package com.pusher.pushnotifications
 import java.util.regex.Pattern
 import android.content.Context
 import android.os.*
-import com.google.firebase.iid.FirebaseInstanceId
+import com.google.firebase.installations.FirebaseInstallations
+import com.google.firebase.messaging.FirebaseMessaging
 import com.pusher.pushnotifications.api.DeviceMetadata
 import com.pusher.pushnotifications.api.PushNotificationsAPI
 import com.pusher.pushnotifications.auth.TokenProvider
@@ -92,12 +93,12 @@ internal class ServerSyncEventHandler private constructor(looper: Looper): Handl
  */
 class PushNotificationsInstance @JvmOverloads constructor(
     context: Context,
-    instanceId: String
+    protected val instanceId: String
 ) {
   private val log = Logger.get(this::class)
 
   private val sdkConfig = SDKConfiguration(context)
-  private val deviceStateStore = DeviceStateStore.obtain(instanceId, context)
+  private val deviceStateStore = InstanceDeviceStateStore.obtain(instanceId, context)
   private val oldSDKDeviceStateStore = OldSDKDeviceStateStore(context)
 
   private val serverSyncEventHandler = ServerSyncEventHandler.obtain(instanceId, context.mainLooper)
@@ -112,32 +113,21 @@ class PushNotificationsInstance @JvmOverloads constructor(
           serverSyncEventHandler.sendMessage(Message.obtain().apply { obj = msg })
         },
         getTokenProvider = {
-          PushNotifications.tokenProvider
+          PushNotifications.tokenProvider[instanceId]
         }
     )
   }()
 
   init {
     Validations.validateApplicationIcon(context)
-    PushNotificationsInstance.getInstanceId(context)?.let {
-      val isNewInstanceId = it != instanceId
-      if (isNewInstanceId) {
-        throw PusherAlreadyRegisteredException("This device has already been registered to a Pusher " +
-            "Push Notifications application with instance ID: $it. " +
-            "If you would like to register this device to $instanceId please reinstall the application.")
-      }
-    }
-    deviceStateStore.instanceId = instanceId
+    val dds = DeviceStateStore(context)
+
+    dds.instanceIds = dds.instanceIds.apply { add(instanceId) }
   }
 
   companion object {
     private val validInterestRegex = Pattern.compile("^[a-zA-Z0-9_\\-=@,.;]{1,164}$").toRegex()
-
-    fun getInstanceId(context: Context): String? {
-      return DeviceStateStore(context).instanceId
-    }
   }
-  
 
   private fun addInterestToStore(interest: String): Boolean {
     val interests = deviceStateStore.interests
@@ -176,11 +166,18 @@ class PushNotificationsInstance @JvmOverloads constructor(
     startHasBeenCalledThisSession = true
     val handleFcmToken = { fcmToken: String ->
       synchronized(deviceStateStore) {
-        if (deviceStateStore.startJobHasBeenEnqueued) {
-          serverSyncHandler.sendMessage(ServerSyncHandler.refreshToken(fcmToken))
-        } else {
-          serverSyncHandler.sendMessage(ServerSyncHandler.start(fcmToken, oldSDKDeviceStateStore.clientIds()))
-          deviceStateStore.startJobHasBeenEnqueued = true
+        if (startHasBeenCalledThisSession) {
+          if (deviceStateStore.startJobHasBeenEnqueued) {
+            serverSyncHandler.sendMessage(ServerSyncHandler.refreshToken(fcmToken))
+          } else {
+            serverSyncHandler.sendMessage(
+              ServerSyncHandler.start(
+                fcmToken,
+                oldSDKDeviceStateStore.clientIds()
+              )
+            )
+            deviceStateStore.startJobHasBeenEnqueued = true
+          }
         }
       }
 
@@ -188,7 +185,7 @@ class PushNotificationsInstance @JvmOverloads constructor(
     }
 
     MessagingService.onRefreshToken = handleFcmToken
-    FirebaseInstanceId.getInstance().instanceId.addOnCompleteListener { task ->
+    FirebaseInstallations.getInstance().getToken(true).addOnCompleteListener { task ->
       if (!task.isSuccessful) {
         log.w("Failed to get the token from FCM", task.exception)
       } else {
@@ -372,11 +369,11 @@ class PushNotificationsInstance @JvmOverloads constructor(
    * @param callback callback used to indicate whether the user association process has succeeded
    */
   @JvmOverloads
-  fun setUserId(userId: String, tokenProvider: TokenProvider, callback: BeamsCallback<Void, PusherCallbackError> = NoopBeamsCallback()) {
+  fun setUserId(userId: String, tokenProvider: TokenProvider?, callback: BeamsCallback<Void, PusherCallbackError> = NoopBeamsCallback()) {
     if (tokenProvider == null) { // this can happen when using Java
       throw IllegalStateException("Token provider can't be null")
     }
-    PushNotifications.tokenProvider = tokenProvider
+    PushNotifications.tokenProvider[instanceId] = tokenProvider
 
     if (!startHasBeenCalledThisSession) {
       throw IllegalStateException("Start method must be called before setUserId")

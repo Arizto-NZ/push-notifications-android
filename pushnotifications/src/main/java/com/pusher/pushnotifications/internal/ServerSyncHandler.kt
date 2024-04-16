@@ -6,6 +6,8 @@ import com.pusher.pushnotifications.api.*
 import com.pusher.pushnotifications.auth.TokenProvider
 import com.pusher.pushnotifications.logging.Logger
 import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import dev.zacsweers.moshisealed.reflect.MoshiSealedJsonAdapterFactory
 import java.io.File
 import java.math.BigInteger
 import java.security.MessageDigest
@@ -13,7 +15,7 @@ import java.util.concurrent.*
 
 class ServerSyncHandler private constructor(
     private val api: PushNotificationsAPI,
-    private val deviceStateStore: DeviceStateStore,
+    private val deviceStateStore: InstanceDeviceStateStore,
     private val jobQueue: PersistentJobQueue<ServerSyncJob>,
     private val handleServerSyncEvent: (ServerSyncEvent) -> Unit,
     private val getTokenProvider: () -> TokenProvider?,
@@ -63,7 +65,7 @@ class ServerSyncHandler private constructor(
     internal fun obtain(
         instanceId: String,
         api: PushNotificationsAPI,
-        deviceStateStore: DeviceStateStore,
+        deviceStateStore: InstanceDeviceStateStore,
         secureFileDir: File,
         handleServerSyncEvent: (ServerSyncEvent) -> Unit,
         getTokenProvider: () -> TokenProvider?
@@ -73,10 +75,15 @@ class ServerSyncHandler private constructor(
           val handlerThread = HandlerThread("ServerSyncHandler-$instanceId")
           handlerThread.start()
 
-          val moshi = Moshi.Builder().add(ServerSyncJob.polymorphicJsonAdapterFactory).build()
+          val moshi = Moshi.Builder()
+                  .add(MoshiSealedJsonAdapterFactory())
+                  .add(KotlinJsonAdapterFactory())
+                  .build()
           val converter = MoshiConverter(moshi.adapter(ServerSyncJob::class.java))
 
-          val jobQueue = TapeJobQueue<ServerSyncJob>(File(secureFileDir, "$instanceId.jobqueue"), converter )
+          File(secureFileDir, "beams").mkdirs()
+          val file = File(secureFileDir, "beams/$instanceId.jobqueue")
+          val jobQueue = TapeJobQueue<ServerSyncJob>(file, converter)
           ServerSyncHandler(
               api = api,
               deviceStateStore = deviceStateStore,
@@ -117,7 +124,7 @@ class ServerSyncHandler private constructor(
 
 class ServerSyncProcessHandler internal constructor(
     private val api: PushNotificationsAPI,
-    private val deviceStateStore: DeviceStateStore,
+    private val deviceStateStore: InstanceDeviceStateStore,
     private val jobQueue: PersistentJobQueue<ServerSyncJob>,
     private val handleServerSyncEvent: (ServerSyncEvent) -> Unit,
     private val getTokenProvider: () -> TokenProvider?,
@@ -399,12 +406,21 @@ class ServerSyncProcessHandler internal constructor(
                 cause = null // Not forwarding `e` because it is internal
             ))
           )
+    } catch (e: PushNotificationsAPIUnprocessableEntity) {
+      handleServerSyncEvent(
+          UserIdSet(
+              userId = job.userId,
+              pusherCallbackError = PusherCallbackError(
+                message = "Could not set user id: ${e.reason}",
+                cause = e
+            ))
+          )
     } catch (e: PushNotificationsAPIBadRequest) {
       handleServerSyncEvent(
           UserIdSet(
             userId = job.userId,
             pusherCallbackError = PusherCallbackError(
-                message = "Something went wrong. Please contact support@pusher.com.",
+                message = "Something went wrong: ${e.reason}. Please contact support@pusher.com.",
                 cause = e
             ))
       )

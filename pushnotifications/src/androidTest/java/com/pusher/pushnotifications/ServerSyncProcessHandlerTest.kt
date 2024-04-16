@@ -1,12 +1,15 @@
 package com.pusher.pushnotifications
 
-import android.support.test.InstrumentationRegistry
-import android.support.test.runner.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.pusher.pushnotifications.api.DeviceMetadata
 import com.pusher.pushnotifications.api.PushNotificationsAPI
+import com.pusher.pushnotifications.api.PushNotificationsAPIUnprocessableEntity
 import com.pusher.pushnotifications.auth.TokenProvider
 import com.pusher.pushnotifications.internal.*
 import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import dev.zacsweers.moshisealed.reflect.MoshiSealedJsonAdapterFactory
 import junit.framework.Assert.assertTrue
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -25,20 +28,23 @@ import java.lang.RuntimeException
 
 @RunWith(AndroidJUnit4::class)
 class ServerSyncProcessHandlerTest {
+  val instanceId = "000000-c1de-09b9-a8f6-2a22dbdd062a"
+
   @Before
   @After
   fun cleanup() {
-    val deviceStateStore = DeviceStateStore(InstrumentationRegistry.getTargetContext())
+    val deviceStateStore = InstanceDeviceStateStore(InstrumentationRegistry.getInstrumentation().targetContext, instanceId)
     Assert.assertTrue(deviceStateStore.clear())
     Assert.assertNull(deviceStateStore.deviceId)
     Assert.assertThat(deviceStateStore.interests.size, `is`(equalTo(0)))
   }
 
-  val instanceId = "000000-c1de-09b9-a8f6-2a22dbdd062a"
   private val mockServer = MockWebServer().apply { start() }
   private val api = PushNotificationsAPI(instanceId, mockServer.url("/").toString())
-  private val deviceStateStore = DeviceStateStore(InstrumentationRegistry.getTargetContext())
-  val moshi = Moshi.Builder().add(ServerSyncJob.polymorphicJsonAdapterFactory).build()
+  private val deviceStateStore = InstanceDeviceStateStore(InstrumentationRegistry.getInstrumentation().targetContext, instanceId)
+  val moshi = Moshi.Builder()
+          .add(MoshiSealedJsonAdapterFactory())
+          .add(KotlinJsonAdapterFactory()).build()
   val converter = MoshiConverter(moshi.adapter(ServerSyncJob::class.java))
 
   private val jobQueue = {
@@ -46,7 +52,7 @@ class ServerSyncProcessHandlerTest {
     tempFile.delete() // QueueFile expects a handle to a non-existent file on first run.
     TapeJobQueue<ServerSyncJob>(tempFile, converter)
   }()
-  private val looper = InstrumentationRegistry.getContext().mainLooper
+  private val looper = InstrumentationRegistry.getInstrumentation().targetContext.mainLooper
   private var lastHandleServerSyncEvent: ServerSyncEvent? = null
   private var tokenProvider: TokenProvider? = null
   private val handler = ServerSyncProcessHandler(
@@ -661,6 +667,40 @@ class ServerSyncProcessHandlerTest {
     assertThat((lastHandleServerSyncEvent!! as UserIdSet).userId, `is`(equalTo(userId)))
     assertNotNull((lastHandleServerSyncEvent!! as UserIdSet).pusherCallbackError)
     assertThat((lastHandleServerSyncEvent!! as UserIdSet).pusherCallbackError!!.cause, `is`(equalTo(ExceptionalTokenProvider.exception)))
+  }
+
+  @Test
+  fun setUserIdShouldReturnErrorEventIfTheUserHasTooManyDevicesAlready() {
+    val userId = "alice"
+    tokenProvider = StubTokenProvider()
+
+    assertThat(mockServer.requestCount, `is`(equalTo(0)))
+    assertNull(deviceStateStore.userId)
+
+    val startJob = ServerSyncHandler.start("token-123", emptyList())
+    jobQueue.push(startJob.obj as ServerSyncJob)
+
+    // expect register device
+    mockServer.enqueue(MockResponse().setBody("""{"id": "d-123", "initialInterestSet": []}"""))
+
+    handler.handleMessage(startJob)
+
+    assertThat(mockServer.requestCount, `is`(equalTo(1)))
+    assertNotNull(deviceStateStore.deviceId)
+    assertNull(deviceStateStore.userId)
+
+    val setUserIdJob = ServerSyncHandler.setUserId(userId)
+    jobQueue.push(setUserIdJob.obj as ServerSyncJob)
+
+    // expect set user id returning a 422 unprocessable entity
+    mockServer.enqueue(MockResponse().setBody("{}").setResponseCode(422))
+
+    handler.handleMessage(setUserIdJob)
+
+    assertNotNull(lastHandleServerSyncEvent)
+    assertThat((lastHandleServerSyncEvent!! as UserIdSet).userId, `is`(equalTo(userId)))
+    assertNotNull((lastHandleServerSyncEvent!! as UserIdSet).pusherCallbackError)
+    assertNotNull((lastHandleServerSyncEvent!! as UserIdSet).pusherCallbackError!!.cause is PushNotificationsAPIUnprocessableEntity)
   }
 
   @Test
