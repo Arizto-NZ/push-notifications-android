@@ -4,7 +4,8 @@
     <uses-permission android:name="${applicationId}.permission.C2D_MESSAGE"/>
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <application>
+    <application
+        android:fullBackupContent="@xml/backup_rules">
         <receiver
             android:name="com.pusher.pushnotifications.reporting.FCMMessageReceiver"
             android:permission="com.google.android.c2dm.permission.SEND"
@@ -14,17 +15,10 @@
                 <category android:name="${applicationId}" />
             </intent-filter>
         </receiver>
-        <service
-            android:name="com.pusher.pushnotifications.reporting.ReportingJobService"
-            android:permission="android.permission.BIND_JOB_SERVICE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.firebase.jobdispatcher.ACTION_EXECUTE"/>
-            </intent-filter>
-        </service>
 
         <service
-            android:name="com.pusher.pushnotifications.fcm.EmptyMessagingService">
+            android:name="com.pusher.pushnotifications.fcm.EmptyMessagingService"
+            android:exported="false">
             <intent-filter android:priority="1">
                 <action android:name="com.google.firebase.MESSAGING_EVENT"/>
             </intent-filter>
@@ -36,7 +30,9 @@
             android:exported="false"
             android:initOrder="99" />
 
-        <activity android:name="com.pusher.pushnotifications.reporting.OpenNotificationActivity">
+        <activity 
+            android:name="com.pusher.pushnotifications.reporting.OpenNotificationActivity"
+            android:exported="false" >
             <intent-filter>
                 <action android:name="com.pusher.pushnotifications.OPEN_TRACKING" />
                 <category android:name="android.intent.category.DEFAULT" />

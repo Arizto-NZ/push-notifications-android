@@ -1,6 +1,6 @@
 # Push Notifications Android
 
-[![Build Status](https://www.bitrise.io/app/45610b9746e396f5/status.svg?token=OsxReMr5vbhXk7Y0wRuynQ&branch=master)](https://www.bitrise.io/app/45610b9746e396f5)
+[![Build Status](https://app.bitrise.io/app/45610b9746e396f5/status.svg?token=OsxReMr5vbhXk7Y0wRuynQ&branch=master)](https://www.bitrise.io/app/45610b9746e396f5)
 [![Twitter](https://img.shields.io/badge/twitter-@Pusher-blue.svg?style=flat)](http://twitter.com/Pusher)
 
 This is the Android SDK for the [Pusher Beams](https://pusher.com/beams) service.
@@ -26,6 +26,7 @@ buildscript {
 
 ### Update your app level gradle config
 
+If using firebase-messaging version below 22.0.0:
 ```
 dependencies {
     ...
@@ -33,7 +34,22 @@ dependencies {
     // Add these lines
     implementation 'com.google.firebase:firebase-core:16.0.9'
     implementation 'com.google.firebase:firebase-messaging:18.0.0'
-    implementation 'com.pusher:push-notifications-android:1.4.2'
+    implementation 'com.pusher:push-notifications-android:1.9.2'
+}
+
+// Add this line to the end of the file
+apply plugin: 'com.google.gms.google-services'
+```
+
+If using firebase-messaging 22.0.0 and above:
+```
+dependencies {
+    ...
+
+    // Add these lines
+    implementation 'com.google.firebase:firebase-messaging:22.0.0'
+    implementation 'com.google.firebase:firebase-installations:17.1.0'
+    implementation 'com.pusher:push-notifications-android:1.9.2'
 }
 
 // Add this line to the end of the file

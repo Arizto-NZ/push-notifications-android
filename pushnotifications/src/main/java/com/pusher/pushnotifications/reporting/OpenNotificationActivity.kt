@@ -3,10 +3,10 @@ package com.pusher.pushnotifications.reporting
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import com.firebase.jobdispatcher.*
+import androidx.work.*
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
-import com.pusher.pushnotifications.internal.DeviceStateStore
+import com.pusher.pushnotifications.internal.InstanceDeviceStateStore
 import com.pusher.pushnotifications.logging.Logger
 import com.pusher.pushnotifications.reporting.api.OpenEvent
 
@@ -19,13 +19,13 @@ import com.pusher.pushnotifications.reporting.api.OpenEvent
 class OpenNotificationActivity: Activity() {
     private val log = Logger.get(this::class)
 
-    private fun startIntent(bundle: Bundle, clickAction: String? = null) {
+    private fun startIntent(bundle: Bundle?, clickAction: String? = null) {
         val i: Intent
         if (clickAction != null) {
             i = Intent()
             i.action = clickAction
         } else {
-            i = packageManager.getLaunchIntentForPackage(packageName)
+            i = packageManager.getLaunchIntentForPackage(packageName)!!
         }
 
         i.replaceExtras(bundle)
@@ -48,11 +48,11 @@ class OpenNotificationActivity: Activity() {
 
         intent?.getStringExtra("pusher")?.let { pusherDataJson ->
             try {
-                val deviceStateStore = DeviceStateStore(applicationContext)
                 val gson = Gson()
                 val pusherData = gson.fromJson(pusherDataJson, PusherMetadata::class.java)
                 log.i("Got a valid pusher message.")
 
+                val deviceStateStore = InstanceDeviceStateStore(applicationContext, pusherData.instanceId)
                 val deviceId = deviceStateStore.deviceId
                 if (deviceId == null) {
                     log.e("Failed to get device ID (device ID not stored) - Skipping open tracking.")
@@ -61,23 +61,24 @@ class OpenNotificationActivity: Activity() {
                 }
 
                 val reportEvent = OpenEvent(
+                   instanceId = pusherData.instanceId,
                    publishId = pusherData.publishId,
                    deviceId = deviceId,
                    userId = deviceStateStore.userId,
                    timestampSecs = System.currentTimeMillis() / 1000
                 )
 
-                val dispatcher = FirebaseJobDispatcher(GooglePlayDriver(applicationContext))
-                val job = dispatcher.newJobBuilder()
-                        .setService(ReportingJobService::class.java)
-                        .setTag("pusher.open.publishId=${pusherData.publishId}")
-                        .setConstraints(Constraint.ON_ANY_NETWORK)
-                        .setRetryStrategy(RetryStrategy.DEFAULT_EXPONENTIAL)
-                        .setLifetime(Lifetime.UNTIL_NEXT_BOOT)
-                        .setExtras(ReportingJobService.toBundle(reportEvent))
+                val reportWorker = OneTimeWorkRequest.Builder(ReportingWorker::class.java)
+                        .setConstraints(Constraints.Builder()
+                                .setRequiredNetworkType(NetworkType.CONNECTED)
+                                .build())
+                        .setInputData(ReportingWorker.toInputData(reportEvent))
                         .build()
 
-                dispatcher.mustSchedule(job)
+                val workManagerInstance = WorkManager.getInstance(applicationContext)
+                workManagerInstance.enqueueUniqueWork("pusher.open.publishId=${pusherData.publishId}",
+                        ExistingWorkPolicy.KEEP,
+                        reportWorker)
 
                 startIntent(intent.extras, pusherData.clickAction)
             } catch (_: JsonSyntaxException) {
