@@ -83,6 +83,80 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Changed
 - Update persistent storage layer to use JSON
 
+## [1.9.2] - 2023-02-22
+
+### Changed
+- Revert firebase-iid dependency removal
+
+## [1.9.1] - 2022-12-21
+
+### Changed
+- Removed firebase-iid dependency in favor of firebase-installations.
+
+## [1.9.0] - 2022-01-04
+
+### Fixed
+- Fix issue with calling stop() then calling start() again
+
+## [1.8.0] - 2021-11-11
+
+### Fixed
+- Fix issue #126 and #127
+
+## [1.7.0] - 2021-06-07
+
+### Fixed
+- Fix issue #112 and #117
+
+### Changed
+- Migrate to AndroidX
+- Update Firebase dependencies
+- Introduce Android WorkManager in place of Firebase JobDispatcher
+
+## [1.6.2] - 2020-01-27
+
+### Fixed
+- Make sure proguard does not interfere with offline job persistence
+
+## [1.6.1] - 2020-01-27
+
+### Fixed
+- Don't crash on initialisation if the application manifest contains no metadata whatsoever.
+
+## [1.6.0] - 2020-01-08
+
+### Fixed
+- Fix #100 by updating our [moshi dependency](https://github.com/square/moshi) to 1.9. If you use moshi you will also need to upgrade to 1.9 before updating beams.
+
+## [1.5.1] - 2019-12-02
+
+### Fixed
+- Fix an issue if the instanceId isn't present when reporting a push notification event
+
+## [1.5.0] - 2019-11-13
+
+### Added
+- Support for multiple instances in the same application
+
+## [1.4.6] - 2019-11-01
+
+### Changed
+- Better error handling when User already has too many devices
+- Better error messages for when server rejects requests
+
+## [1.4.5] - 2019-09-05
+- Fix issue #86 Prevent Beams files and shared preferences from being auto backed up
+
+## [1.4.4] - 2019-07-30
+
+### Fixed
+- Fix issue #85 JsonEncodingException when loading stored pending operations
+
+## [1.4.3] - 2019-06-07
+
+### Changed
+- Update persistent storage layer to use JSON
+
 ## [1.4.2] - 2019-05-31
 
 ### Fixed
