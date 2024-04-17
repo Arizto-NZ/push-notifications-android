@@ -38,7 +38,6 @@ class OpenNotificationActivity: Activity() {
         link = i.getStringExtra("link")
 
         if(link != null) {
-          log.i("Got URI for action $link")
           i.setData(Uri.parse(link))
         }
 
