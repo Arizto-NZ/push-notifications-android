@@ -20,7 +20,7 @@ import com.pusher.pushnotifications.reporting.api.OpenEvent
 class OpenNotificationActivity: Activity() {
     private val log = Logger.get(this::class)
 
-    private fun startIntent(bundle: Bundle, clickAction: String? = null) {
+    private fun startIntent(bundle: Bundle?, clickAction: String? = null) {
         val i: Intent
         if (clickAction != null) {
             i = Intent()
