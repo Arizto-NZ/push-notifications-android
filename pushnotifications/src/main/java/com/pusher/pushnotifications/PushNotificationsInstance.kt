@@ -3,7 +3,8 @@ package com.pusher.pushnotifications
 import java.util.regex.Pattern
 import android.content.Context
 import android.os.*
-import com.google.firebase.iid.FirebaseInstanceId
+import com.google.firebase.installations.FirebaseInstallations
+import com.google.firebase.messaging.FirebaseMessaging
 import com.pusher.pushnotifications.api.DeviceMetadata
 import com.pusher.pushnotifications.api.PushNotificationsAPI
 import com.pusher.pushnotifications.auth.TokenProvider
@@ -165,11 +166,18 @@ class PushNotificationsInstance @JvmOverloads constructor(
     startHasBeenCalledThisSession = true
     val handleFcmToken = { fcmToken: String ->
       synchronized(deviceStateStore) {
-        if (deviceStateStore.startJobHasBeenEnqueued) {
-          serverSyncHandler.sendMessage(ServerSyncHandler.refreshToken(fcmToken))
-        } else {
-          serverSyncHandler.sendMessage(ServerSyncHandler.start(fcmToken, oldSDKDeviceStateStore.clientIds()))
-          deviceStateStore.startJobHasBeenEnqueued = true
+        if (startHasBeenCalledThisSession) {
+          if (deviceStateStore.startJobHasBeenEnqueued) {
+            serverSyncHandler.sendMessage(ServerSyncHandler.refreshToken(fcmToken))
+          } else {
+            serverSyncHandler.sendMessage(
+              ServerSyncHandler.start(
+                fcmToken,
+                oldSDKDeviceStateStore.clientIds()
+              )
+            )
+            deviceStateStore.startJobHasBeenEnqueued = true
+          }
         }
       }
 
@@ -177,7 +185,7 @@ class PushNotificationsInstance @JvmOverloads constructor(
     }
 
     MessagingService.onRefreshToken = handleFcmToken
-    FirebaseInstanceId.getInstance().instanceId.addOnCompleteListener { task ->
+    FirebaseInstallations.getInstance().getToken(true).addOnCompleteListener { task ->
       if (!task.isSuccessful) {
         log.w("Failed to get the token from FCM", task.exception)
       } else {
@@ -361,7 +369,7 @@ class PushNotificationsInstance @JvmOverloads constructor(
    * @param callback callback used to indicate whether the user association process has succeeded
    */
   @JvmOverloads
-  fun setUserId(userId: String, tokenProvider: TokenProvider, callback: BeamsCallback<Void, PusherCallbackError> = NoopBeamsCallback()) {
+  fun setUserId(userId: String, tokenProvider: TokenProvider?, callback: BeamsCallback<Void, PusherCallbackError> = NoopBeamsCallback()) {
     if (tokenProvider == null) { // this can happen when using Java
       throw IllegalStateException("Token provider can't be null")
     }
