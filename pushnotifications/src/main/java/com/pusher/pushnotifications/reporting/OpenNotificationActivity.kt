@@ -21,7 +21,6 @@ class OpenNotificationActivity: Activity() {
     private val log = Logger.get(this::class)
 
     private fun startIntent(bundle: Bundle, clickAction: String? = null) {
-        log.i("OpenNotificationActivity $clickAction")
         val i: Intent
         if (clickAction != null) {
             i = Intent()
